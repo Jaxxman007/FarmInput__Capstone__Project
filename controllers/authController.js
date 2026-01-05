@@ -5,8 +5,17 @@ const crypto = require("crypto");
 
 // SIGNUP
 exports.signup = async (req, res) => {
-  const { name, email, password } = req.body;
   try {
+    const { name, email, password } = req.body;
+
+    // Validate input
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide name, email, and password",
+      });
+    }
+
     // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -16,29 +25,61 @@ exports.signup = async (req, res) => {
       });
     }
 
+    // Create new user
     const user = await User.create({ name, email, password });
+
+    // Generate token
     const token = generateToken(user);
-    res.status(201).json({ success: true, token });
+
+    return res.status(201).json({
+      success: true,
+      message: "Signup successful",
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+      },
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error("SIGNUP ERROR:", err);
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
 
 // LOGIN
 exports.login = async (req, res) => {
-  const { email, password } = req.body;
   try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide email and password",
+      });
+    }
+
     const user = await User.findOne({ email });
     if (!user || !(await user.matchPassword(password))) {
       return res
         .status(401)
         .json({ success: false, message: "Invalid credentials" });
     }
+
     const token = generateToken(user);
-    res.status(200).json({ success: true, token });
+    return res.status(200).json({
+      success: true,
+      message: "Login successful",
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+      },
+    });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    console.error("LOGIN ERROR:", err);
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
 
@@ -46,7 +87,6 @@ exports.login = async (req, res) => {
 exports.forgotPassword = async (req, res) => {
   const { email } = req.body;
 
-  // Do NOT reveal if user exists (prevents email enumeration)
   const user = await User.findOne({ email });
   if (!user) {
     return res.status(200).json({
@@ -72,6 +112,7 @@ If you did not request this, please ignore this email.
 `;
 
   try {
+    
     await sendEmail({
       email: user.email,
       subject: "Password Reset Request",
@@ -100,7 +141,6 @@ If you did not request this, please ignore this email.
 exports.resetPassword = async (req, res) => {
   const { password, confirmPassword } = req.body;
 
-  // Validate input
   if (!password || !confirmPassword) {
     return res.status(400).json({
       success: false,
@@ -115,7 +155,7 @@ exports.resetPassword = async (req, res) => {
     });
   }
 
-  const resetPasswordToken = require("crypto")
+  const resetPasswordToken = crypto
     .createHash("sha256")
     .update(req.params.token)
     .digest("hex");
